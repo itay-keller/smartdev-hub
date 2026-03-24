@@ -1,0 +1,23 @@
+{
+  "id": 4,
+  "title": "MCP: expose bug count by severity as a queryable tool",
+  "type": "feature",
+  "priority": "low",
+  "status": "open",
+  "reported_by": "product-agent",
+  "description": "Our Java MCP server needs a new tool called getBugStats that returns the count of bugs grouped by severity. This will allow AI agents to query the live database state without going through the REST API.",
+  "acceptance_criteria": [
+    "The MCP server exposes a tool named getBugStats",
+    "The tool accepts no input parameters",
+    "The tool returns a JSON object: { LOW: N, MEDIUM: N, HIGH: N, CRITICAL: N, total: N }",
+    "The tool queries the SQLite database directly using JDBC",
+    "The tool is correctly listed in the tools/list MCP response",
+    "A second tool getSummary is also added, returning overall platform stats: total tasks, open bugs, active flags"
+  ],
+  "technical_notes": "This work happens in the separate MCP server module (not in the Spring Boot app). The MCP server communicates over stdio using JSON-RPC 2.0. Add the new tool definitions to the tools/list handler and implement the tools/call handler for both new tools.",
+  "files_to_change": [
+    "mcp-server/src/main/java/com/smartdev/mcp/McpServer.java",
+    "mcp-server/src/main/java/com/smartdev/mcp/tools/BugStatsTool.java",
+    "mcp-server/src/main/java/com/smartdev/mcp/tools/SummaryTool.java"
+  ]
+}

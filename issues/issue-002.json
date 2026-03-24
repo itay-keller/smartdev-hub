@@ -1,0 +1,21 @@
+{
+  "id": 2,
+  "title": "Bug: tasks with null priority crash the /tasks/sorted endpoint",
+  "type": "bug",
+  "priority": "high",
+  "status": "open",
+  "reported_by": "qa-agent",
+  "description": "Calling GET /api/tasks/sorted throws a NullPointerException when any task has a null priority field. This happens because the sort comparator calls getPriority().ordinal() without a null check.",
+  "stacktrace": "java.lang.NullPointerException: Cannot invoke \"com.smartdev.hub.entity.Task$Priority.ordinal()\" because the return value of \"com.smartdev.hub.entity.Task.getPriority()\" is null\n\tat com.smartdev.hub.service.TaskService.lambda$getTasksSortedByPriority$0(TaskService.java:52)\n\tat java.base/java.util.stream.SortedOps$SizedRefSortingSink.end(SortedOps.java:357)",
+  "acceptance_criteria": [
+    "GET /api/tasks/sorted no longer throws NPE when tasks have null priority",
+    "Tasks with null priority should appear at the END of the sorted list",
+    "A regression test must be added that passes tasks with null priority and asserts correct ordering",
+    "The existing unit test in TaskServiceTest that expects the NPE should be updated to expect correct behaviour instead"
+  ],
+  "technical_notes": "Fix is in TaskService.getTasksSortedByPriority(). Use Comparator.comparing with a null-safe comparator e.g. Comparator.nullsLast(). The test TaskServiceTest.getTasksSortedByPriority_shouldThrow_whenPriorityIsNull needs to be updated.",
+  "files_to_change": [
+    "src/main/java/com/smartdev/hub/service/TaskService.java",
+    "src/test/java/com/smartdev/hub/service/TaskServiceTest.java"
+  ]
+}

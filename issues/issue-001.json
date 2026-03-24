@@ -1,0 +1,21 @@
+{
+  "id": 1,
+  "title": "Add pagination to GET /tasks",
+  "type": "feature",
+  "priority": "medium",
+  "status": "open",
+  "reported_by": "product-agent",
+  "description": "The GET /api/tasks endpoint currently returns all tasks in one response. As the dataset grows this will cause performance issues. We need to add pagination support.",
+  "acceptance_criteria": [
+    "GET /api/tasks accepts optional query params: page (default 0) and size (default 10)",
+    "Response should be wrapped in a Page object containing: content (list of tasks), totalElements, totalPages, currentPage",
+    "Existing behaviour without params should still work (defaults apply)",
+    "A new unit test must cover the paginated response"
+  ],
+  "technical_notes": "Use Spring Data's Pageable and Page<T>. The repository already extends JpaRepository which supports findAll(Pageable). Update TaskController and TaskService.",
+  "files_to_change": [
+    "src/main/java/com/smartdev/hub/controller/TaskController.java",
+    "src/main/java/com/smartdev/hub/service/TaskService.java",
+    "src/test/java/com/smartdev/hub/service/TaskServiceTest.java"
+  ]
+}

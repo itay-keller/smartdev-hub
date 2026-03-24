@@ -1,0 +1,24 @@
+{
+  "id": 3,
+  "title": "Feature: add GET /api/activity endpoint",
+  "type": "feature",
+  "priority": "medium",
+  "status": "open",
+  "reported_by": "product-agent",
+  "description": "We need a way to see a recent activity feed across the whole platform — what tasks were created, which bugs changed status, which feature flags were toggled. The ActivityLog entity and repository already exist but there is no REST endpoint exposing them.",
+  "acceptance_criteria": [
+    "GET /api/activity returns the 50 most recent activity log entries, newest first",
+    "GET /api/activity?entityType=TASK filters to only task-related entries",
+    "GET /api/activity?entityType=BUG filters to only bug-related entries",
+    "Each entry includes: id, entityType, entityId, action, details, actor, timestamp",
+    "A new ActivityController class is created",
+    "Unit tests cover both the unfiltered and filtered cases"
+  ],
+  "technical_notes": "Create ActivityController and ActivityService. ActivityLogRepository already has findTop50ByOrderByTimestampDesc() and findByEntityTypeAndEntityId(). You may need to add findByEntityType(String entityType) to the repository.",
+  "files_to_change": [
+    "src/main/java/com/smartdev/hub/controller/ActivityController.java",
+    "src/main/java/com/smartdev/hub/service/ActivityService.java",
+    "src/main/java/com/smartdev/hub/repository/ActivityLogRepository.java",
+    "src/test/java/com/smartdev/hub/service/ActivityServiceTest.java"
+  ]
+}
