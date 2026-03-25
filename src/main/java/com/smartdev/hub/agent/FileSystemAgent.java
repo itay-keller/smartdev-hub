@@ -184,8 +184,10 @@ public class FileSystemAgent {
         }
     }
 
-    private String toolWriteFile(String relativePath, String content) throws IOException {
+    String toolWriteFile(String relativePath, String content) throws IOException {
         Path path = Paths.get(PROJECT_ROOT, relativePath).normalize();
+
+        System.out.println("  [writeFile DEBUG] absolute path = " + path.toAbsolutePath());
 
         if (!path.startsWith(Paths.get(PROJECT_ROOT))) {
             return "Error: access denied — path is outside project root";
@@ -223,7 +225,7 @@ public class FileSystemAgent {
         JsonNode tools = buildToolDefinitions();
 
         // Loop: send messages → if tool_call, execute and add result → repeat
-        int maxIterations = 6; // safety limit
+        int maxIterations = 8; // read + read + write needs at least 3 loops
         for (int i = 0; i < maxIterations; i++) {
 
             ObjectNode body = mapper.createObjectNode();
@@ -270,9 +272,30 @@ public class FileSystemAgent {
 
             // No tool call → model is done, return the final answer
             if (toolCalls.isMissingNode() || toolCalls.isEmpty()) {
+                System.out.println("  [LOOP] iteration " + i + " — no tool call, returning final answer");
                 String finalAnswer = message.path("content").asText();
+
+                // Fallback: if the model returned file-like content (markdown/code block)
+                // instead of calling writeFile, extract and write it automatically.
+                // This handles the common case where small models "describe" the write
+                // instead of calling the tool.
+                String pendingWritePath = extractPendingWritePath(messages);
+                if (pendingWritePath != null && looksLikeFileContent(finalAnswer)) {
+                    System.out.println("  [AUTO-WRITE FALLBACK] model forgot to call writeFile — writing automatically");
+                    String cleanContent = stripMarkdownFences(finalAnswer);
+                    try {
+                        String writeResult = toolWriteFile(pendingWritePath, cleanContent);
+                        System.out.println("  " + writeResult);
+                        return "Done. " + writeResult;
+                    } catch (IOException e) {
+                        System.out.println("  [AUTO-WRITE FAILED] " + e.getMessage());
+                    }
+                }
+
                 return finalAnswer;
             }
+
+            System.out.println("  [LOOP] iteration " + i + " — executing " + toolCalls.size() + " tool call(s)");
 
             // Add the assistant's tool_call message to history
             messages.add(message);
@@ -310,6 +333,43 @@ public class FileSystemAgent {
             }
             return response.body().string();
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Auto-write fallback helpers
+    // -------------------------------------------------------------------------
+
+    // Scans the conversation messages to find a write path mentioned by the user
+    private String extractPendingWritePath(ArrayNode messages) {
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            JsonNode msg = messages.get(i);
+            if ("user".equals(msg.path("role").asText())) {
+                String content = msg.path("content").asText();
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                        .compile("(?:write|save)\\s+(?:.*?\\s+)?to\\s+([\\w./-]+\\.(?:md|txt|json|java))")
+                        .matcher(content.toLowerCase());
+                if (m.find()) return m.group(1);
+            }
+        }
+        return null;
+    }
+
+    // Returns true if the text looks like file content rather than a conversational reply
+    private boolean looksLikeFileContent(String text) {
+        String t = text.trim();
+        return t.startsWith("```") || t.startsWith("#") || t.startsWith("//")
+                || t.contains("\n#") || t.contains("\n-") || t.contains("\n*");
+    }
+
+    // Strips ```markdown ``` fences from model output
+    private String stripMarkdownFences(String text) {
+        String t = text.trim();
+        if (t.startsWith("```")) {
+            int firstNewline = t.indexOf('\n');
+            if (firstNewline != -1) t = t.substring(firstNewline + 1);
+            if (t.endsWith("```")) t = t.substring(0, t.lastIndexOf("```")).trim();
+        }
+        return t;
     }
 
     // -------------------------------------------------------------------------
@@ -354,12 +414,24 @@ public class FileSystemAgent {
         System.out.println();
 
         // --- Task 3: cross-file analysis ---
+        // Strategy: agent does the analysis (reads files, compares),
+        // then we write the output file ourselves — reliable, no model coaxing.
         System.out.println("======== Task 3 ========");
-        String answer3 = agent.run(systemPrompt,
-                "Read TaskService.java and TaskServiceTest.java. " +
-                        "Which public methods in TaskService are NOT covered by a test? " +
-                        "Write a short summary to agent-notes/coverage-gaps.md");
-        System.out.println(MODEL + ": " + answer3);
+        String analysis = agent.run(systemPrompt,
+                "Do these steps in order: " +
+                        "1. Call readFile on 'src/main/java/com/smartdev/hub/service/TaskService.java'. " +
+                        "2. Call readFile on 'src/test/java/com/smartdev/hub/service/TaskServiceTest.java'. " +
+                        "3. List every public method in TaskService that has NO corresponding test. " +
+                        "For each gap, write one sentence explaining the risk of not testing it.");
+
+        // Write the file ourselves — no fighting the model over writeFile
+        String outputPath = "agent-notes/coverage-gaps.md";
+        String fileContent = "# Coverage gaps — TaskService\n\n" +
+                "_Generated by FileSystemAgent_\n\n" + analysis;
+        agent.toolWriteFile(outputPath, fileContent);
+
+        System.out.println(MODEL + ": " + analysis);
+        System.out.println("\n(analysis saved to " + outputPath + ")");
 
         System.out.println("\n=== Exercise 5 complete ===");
     }
