@@ -237,6 +237,37 @@ public class FileSystemAgent {
             JsonNode message = response.path("message");
             JsonNode toolCalls = message.path("tool_calls");
 
+            // qwen2.5-coder puts tool calls as JSON text inside content instead of tool_calls
+            // Detect this and parse it into a proper toolCalls node
+            if (toolCalls.isMissingNode() || toolCalls.isEmpty()) {
+                String content = message.path("content").asText().trim();
+                if (content.startsWith("{\"name\"")) {
+                    // One or more tool calls embedded as newline-separated JSON objects in content
+                    // e.g. {"name":"readFile","arguments":{...}}\n{"name":"readFile","arguments":{...}}
+                    ArrayNode syntheticToolCalls = mapper.createArrayNode();
+                    for (String line : content.split("\n")) {
+                        line = line.trim();
+                        if (line.isBlank()) continue;
+                        JsonNode parsed = mapper.readTree(line);
+                        // Normalise to the standard tool_calls format:
+                        // { "function": { "name": "...", "arguments": {...} } }
+                        ObjectNode normalized = mapper.createObjectNode();
+                        ObjectNode fn = normalized.putObject("function");
+                        fn.put("name", parsed.path("name").asText());
+                        fn.set("arguments", parsed.path("arguments"));
+                        syntheticToolCalls.add(normalized);
+                    }
+                    toolCalls = syntheticToolCalls;
+
+                    // Replace the message node with a clean version so history is consistent
+                    ObjectNode fixedMessage = mapper.createObjectNode();
+                    fixedMessage.put("role", "assistant");
+                    fixedMessage.put("content", "");
+                    fixedMessage.set("tool_calls", toolCalls);
+                    message = fixedMessage;
+                }
+            }
+
             // No tool call → model is done, return the final answer
             if (toolCalls.isMissingNode() || toolCalls.isEmpty()) {
                 String finalAnswer = message.path("content").asText();
