@@ -201,7 +201,7 @@ public class ConversationAgent {
             conversation.addUserMessage(input);
 
             // Send full history, stream the reply
-            System.out.print("Mistral: ");
+            System.out.print(MODEL + ": ");
             String reply = agent.chat(conversation);
 
             // Add assistant reply to history — critical for memory to work

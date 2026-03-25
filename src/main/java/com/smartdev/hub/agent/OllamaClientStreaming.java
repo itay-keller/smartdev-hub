@@ -126,7 +126,7 @@ public class OllamaClientStreaming {
         // --- Demo 1: watch tokens arrive live ---
         System.out.println("=== Exercise 2: Streaming response ===");
         System.out.println("(watch the tokens appear one by one)\n");
-        System.out.print("Mistral: ");
+        System.out.print(MODEL + ": ");
 
         String full = client.chatStreaming(systemPrompt,
                 "Explain in 3 bullet points why streaming LLM responses improves user experience.");
@@ -136,7 +136,7 @@ public class OllamaClientStreaming {
 
         // --- Demo 2: longer response so the streaming effect is obvious ---
         System.out.println("\n=== Longer response — streaming effect more visible ===\n");
-        System.out.print("Mistral: ");
+        System.out.print(MODEL + ": ");
 
         client.chatStreaming(systemPrompt,
                 "Write a short Java method that reads a file line by line and prints each line. " +

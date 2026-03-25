@@ -94,7 +94,7 @@ public class OllamaClient {
         String reply = client.chat(systemPrompt, "What is the purpose of a JPA Repository?");
 
         System.out.println("Question: What is the purpose of a JPA Repository?");
-        System.out.println("Mistral: " + reply);
+        System.out.println(MODEL + ": " + reply);
         System.out.println();
 
         // Test 2: code-aware question
@@ -102,7 +102,7 @@ public class OllamaClient {
                 "In one sentence, what does Spring's @Transactional annotation do?");
 
         System.out.println("Question: What does @Transactional do?");
-        System.out.println("Mistral: " + reply2);
+        System.out.println(MODEL + ": " + reply2);
         System.out.println();
 
         System.out.println("=== Connection working! Move on to Exercise 2 ===");
