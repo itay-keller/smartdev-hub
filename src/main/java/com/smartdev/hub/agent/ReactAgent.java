@@ -225,75 +225,27 @@ public class ReactAgent {
             body.set("tools", tools);
 
             JsonNode response = mapper.readTree(sendRequest(body));
-            JsonNode message = response.path("message");
-            JsonNode toolCalls = message.path("tool_calls");
+            OllamaToolParser.ParsedResponse parsed = OllamaToolParser.parse(response);
 
-            // Handle qwen's content-embedded tool call format
-            if (toolCalls.isMissingNode() || toolCalls.isEmpty()) {
-                String content = message.path("content").asText().trim();
-
-                // Strip markdown fences if present — qwen sometimes wraps in ```json ... ```
-                String stripped = content;
-                if (stripped.contains("```")) {
-                    stripped = stripped.replaceAll("```[a-zA-Z]*\\n?", "").replace("```", "").trim();
+            // Print any Thought text the model wrote
+            if (!parsed.thoughtText().isBlank()) {
+                for (String line : parsed.thoughtText().split("\n")) {
+                    if (!line.isBlank()) System.out.println("  " + line);
                 }
-
-                // Check if it's a tool call embedded in content (qwen format)
-                if (stripped.contains("\"name\"") && stripped.contains("\"arguments\"")) {
-                    // Extract Thought lines (non-JSON lines before the tool call)
-                    for (String line : content.split("\n")) {
-                        String t = line.trim();
-                        if (!t.isBlank() && !t.startsWith("{") && !t.startsWith("```") && !t.startsWith("\""))
-                            System.out.println("  " + t);
-                    }
-
-                    ArrayNode synthetic = mapper.createArrayNode();
-                    for (String line : stripped.split("\n")) {
-                        line = line.trim();
-                        if (line.isBlank() || !line.startsWith("{")) continue;
-                        try {
-                            JsonNode parsed = mapper.readTree(line);
-                            if (!parsed.has("name")) continue;
-                            ObjectNode norm = mapper.createObjectNode();
-                            ObjectNode fn = norm.putObject("function");
-                            fn.put("name", parsed.path("name").asText());
-                            fn.set("arguments", parsed.path("arguments"));
-                            synthetic.add(norm);
-                        } catch (Exception ignored) {}
-                    }
-
-                    if (!synthetic.isEmpty()) {
-                        toolCalls = synthetic;
-                        ObjectNode fixedMsg = mapper.createObjectNode();
-                        fixedMsg.put("role", "assistant");
-                        fixedMsg.put("content", "");
-                        fixedMsg.set("tool_calls", toolCalls);
-                        message = fixedMsg;
-                    } else {
-                        // Couldn't parse tool calls — print and return
-                        if (!content.isBlank()) System.out.println("  " + content);
-                        return content;
-                    }
-                } else {
-                    // No tool call — model is done, print any final text
-                    if (!content.isBlank()) {
-                        for (String line : content.split("\n")) {
-                            if (!line.isBlank()) System.out.println("  " + line);
-                        }
-                    }
-                    return content;
-                }
-            } else {
-                // Structured tool_calls — print any thought in content first
-                String thought = message.path("content").asText().trim();
-                if (!thought.isBlank()) System.out.println("  " + thought);
             }
 
-            // Add assistant message to history
-            messages.add(message);
+            // No tool call — model is done
+            if (!parsed.hasToolCalls()) {
+                return parsed.thoughtText().isBlank()
+                        ? "No answer produced."
+                        : parsed.thoughtText();
+            }
+
+            // Add normalised assistant message to history
+            messages.add(parsed.normalizedMessage());
 
             // Execute each tool call
-            for (JsonNode tc : toolCalls) {
+            for (JsonNode tc : parsed.toolCalls()) {
                 String toolName = tc.path("function").path("name").asText();
                 JsonNode args   = tc.path("function").path("arguments");
 
